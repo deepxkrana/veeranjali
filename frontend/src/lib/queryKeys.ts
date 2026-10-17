@@ -1,0 +1,17 @@
+export const queryKeys = {
+  currentUser: ['auth', 'current-user'] as const,
+  people: (params: object) => ['people', params] as const,
+  person: (slug: string) => ['people', slug] as const,
+  operations: (params?: object) => ['operations', params] as const,
+  operation: (slug: string) => ['operations', slug] as const,
+  reference: (type: string) => ['reference', type] as const,
+  bookmarks: ['me', 'bookmarks'] as const,
+  corrections: ['me', 'corrections'] as const,
+  submissions: ['contributor', 'submissions'] as const,
+  adminDashboard: ['admin', 'dashboard'] as const,
+  adminApplications: ['admin', 'applications'] as const,
+  adminSubmissions: ['admin', 'submissions'] as const,
+  adminUsers: ['admin', 'users'] as const,
+  adminCorrections: ['admin', 'corrections'] as const,
+  adminAuditLogs: ['admin', 'audit-logs'] as const,
+};

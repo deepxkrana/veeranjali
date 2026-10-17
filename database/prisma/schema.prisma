@@ -1,0 +1,456 @@
+// Veeranjali Database Schema
+// A digital memorial and knowledge archive
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+generator backendClient {
+  provider = "prisma-client-js"
+  output   = "../../backend/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ============================================================================
+// USER AND AUTHENTICATION
+// ============================================================================
+
+enum UserRole {
+  USER
+  CONTRIBUTOR
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique @db.Text
+  passwordHash  String?   @map("password_hash") @db.Text
+  image         String?   @db.Text
+  bio           String?   @db.Text
+  location      String?   @db.Text
+  role          UserRole  @default(USER)
+  emailVerified DateTime? @map("email_verified")
+  suspendedAt   DateTime? @map("suspended_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  contributorApplications ContributorApplication[]         @relation("UserApplications")
+  reviewedApplications    ContributorApplication[]         @relation("ApplicationReviewer")
+  storySubmissions        StorySubmission[]
+  storyRevisions          StoryRevision[]
+  bookmarks               Bookmark[]
+  correctionReports       CorrectionReport[]               @relation("UserCorrectionReports")
+  resolvedCorrections     CorrectionReport[]               @relation("CorrectionResolver")
+  auditLogs               AuditLog[]
+
+  @@map("users")
+}
+
+model ContributorApplication {
+  id                String                @id @default(cuid())
+  userId            String                @map("user_id")
+  reason            String                @db.Text
+  relevantExperience String?              @map("relevant_experience") @db.Text
+  supportingLinks   String?               @map("supporting_links") @db.Text
+  status            ApplicationStatus     @default(PENDING)
+  adminNote         String?               @map("admin_note") @db.Text
+  reviewedBy        String?               @map("reviewed_by")
+  reviewedAt        DateTime?             @map("reviewed_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  user     User      @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer User?     @relation("ApplicationReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([status])
+  @@index([userId])
+  @@map("contributor_applications")
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================================================
+// PERSON AND TRIBUTE ENTITIES
+// ============================================================================
+
+model Person {
+  id                  String              @id @default(cuid())
+  slug                String              @unique @db.Text
+  fullName            String              @map("full_name") @db.Text
+  displayName         String?             @map("display_name") @db.Text
+  aliases             String?             @db.Text
+  profileImage        String?             @map("profile_image") @db.Text
+
+  // Force and Organization
+  force               String?             @db.Text
+  rank                String?             @db.Text
+  serviceNumber       String?             @map("service_number") @db.Text
+
+  // Personal Details
+  dateOfBirth         DateTime?           @map("date_of_birth")
+  dateOfDeath         DateTime?           @map("date_of_death")
+  placeOfBirth        String?             @map("place_of_birth") @db.Text
+  hometown            String?             @db.Text
+  district            String?             @db.Text
+  state               String?             @db.Text
+  country             String?             @default("India") @db.Text
+
+  // Biography
+  shortSummary        String?             @map("short_summary") @db.Text
+  fullBiography       String?             @map("full_biography") @db.Text
+  education           String?             @db.Text
+  familyBackground    String?             @map("family_background") @db.Text
+
+  // Service Details
+  dateJoinedService   DateTime?           @map("date_joined_service")
+  placeOfDeath        String?             @map("place_of_death") @db.Text
+  circumstancesOfDeath String?            @map("circumstances_of_death") @db.Text
+  deathTerminology    String?             @map("death_terminology") @default("died_in_service") @db.Text
+
+  // Publication
+  verificationStatus  VerificationStatus  @default(UNDER_REVIEW) @map("verification_status")
+  featured            Boolean             @default(false)
+  publishedAt         DateTime?           @map("published_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  serviceRecords      ServiceRecord[]
+  timelineEvents      TimelineEvent[]
+  awards              PersonAward[]
+  operations          PersonOperation[]
+  sources             PersonSource[]
+  mediaAssets         MediaAsset[]
+  storySubmissions    StorySubmission[]
+  correctionReports   CorrectionReport[]
+  bookmarks           Bookmark[]
+
+  @@index([slug])
+  @@index([force])
+  @@index([state])
+  @@index([publishedAt])
+  @@index([featured])
+  @@index([verificationStatus])
+  @@map("people")
+}
+
+enum VerificationStatus {
+  OFFICIALLY_DOCUMENTED
+  VERIFIED_MULTIPLE_SOURCES
+  FAMILY_SUBMITTED
+  COMMUNITY_SUBMITTED
+  UNDER_REVIEW
+  INFORMATION_INCOMPLETE
+}
+
+model ServiceRecord {
+  id              String    @id @default(cuid())
+  personId        String    @map("person_id")
+  organization    String?   @db.Text
+  force           String?   @db.Text
+  rank            String?   @db.Text
+  unit            String?   @db.Text
+  regiment        String?   @db.Text
+  battalion       String?   @db.Text
+  posting         String?   @db.Text
+  location        String?   @db.Text
+  startDate       DateTime? @map("start_date")
+  endDate         DateTime? @map("end_date")
+  description     String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@map("service_records")
+}
+
+model TimelineEvent {
+  id            String        @id @default(cuid())
+  personId      String        @map("person_id")
+  title         String        @db.Text
+  description   String?       @db.Text
+  date          DateTime?
+  location      String?       @db.Text
+  eventType     String?       @map("event_type") @db.Text
+  displayOrder  Int           @default(0) @map("display_order")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([date])
+  @@map("timeline_events")
+}
+
+model Award {
+  id                String    @id @default(cuid())
+  name              String    @unique @db.Text
+  category          String?   @db.Text
+  description       String?   @db.Text
+  issuingAuthority  String?   @map("issuing_authority") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  people PersonAward[]
+
+  @@map("awards")
+}
+
+model PersonAward {
+  personId  String    @map("person_id")
+  awardId   String    @map("award_id")
+  citation  String?   @db.Text
+  date      DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  award  Award  @relation(fields: [awardId], references: [id], onDelete: Cascade)
+
+  @@id([personId, awardId])
+  @@map("person_awards")
+}
+
+model Operation {
+  id                String    @id @default(cuid())
+  slug              String    @unique @db.Text
+  name              String    @db.Text
+  description       String?   @db.Text
+  startDate         DateTime? @map("start_date")
+  endDate           DateTime? @map("end_date")
+  location          String?   @db.Text
+  historicalContext String?   @map("historical_context") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  people PersonOperation[]
+
+  @@index([slug])
+  @@map("operations")
+}
+
+model PersonOperation {
+  personId    String    @map("person_id")
+  operationId String    @map("operation_id")
+  role        String?   @db.Text
+  description String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  person    Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@id([personId, operationId])
+  @@map("person_operations")
+}
+
+model Source {
+  id               String        @id @default(cuid())
+  title            String        @db.Text
+  publisher        String?       @db.Text
+  author           String?       @db.Text
+  sourceType       String?       @map("source_type") @db.Text
+  url              String?       @db.Text
+  publicationDate  DateTime?     @map("publication_date")
+  accessedAt       DateTime?     @map("accessed_at")
+  reliabilityNotes String?       @map("reliability_notes") @db.Text
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  people PersonSource[]
+
+  @@map("sources")
+}
+
+model PersonSource {
+  personId    String    @map("person_id")
+  sourceId    String    @map("source_id")
+  notes       String?   @db.Text
+  sourceOrder Int       @default(0) @map("source_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@id([personId, sourceId])
+  @@map("person_sources")
+}
+
+model MediaAsset {
+  id              String          @id @default(cuid())
+  personId        String          @map("person_id")
+  url             String          @db.Text
+  altText         String?         @map("alt_text") @db.Text
+  caption         String?         @db.Text
+  credit          String?         @db.Text
+  license         String?         @db.Text
+  mediaType       String          @map("media_type") @db.Text
+  approvalStatus  ApprovalStatus  @default(PENDING) @map("approval_status")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+  @@index([approvalStatus])
+  @@map("media_assets")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ============================================================================
+// STORY SUBMISSION AND REVIEW
+// ============================================================================
+
+enum StoryStatus {
+  DRAFT
+  SUBMITTED_FOR_REVIEW
+  NEEDS_CHANGES
+  RESUBMITTED
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+  REJECTED
+}
+
+model StorySubmission {
+  id              String      @id @default(cuid())
+  contributorId   String      @map("contributor_id")
+  personId        String?     @map("person_id")
+  title           String      @db.Text
+  content         String      @db.Text
+  structuredData  Json?       @map("structured_data")
+  status          StoryStatus @default(DRAFT)
+  adminNote       String?     @map("admin_note") @db.Text
+  submittedAt     DateTime?   @map("submitted_at")
+  reviewedAt      DateTime?   @map("reviewed_at")
+  publishedAt     DateTime?   @map("published_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  contributor User           @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  person      Person?        @relation(fields: [personId], references: [id], onDelete: SetNull)
+  revisions   StoryRevision[]
+
+  @@index([status])
+  @@index([contributorId])
+  @@index([personId])
+  @@map("story_submissions")
+}
+
+model StoryRevision {
+  id                String    @id @default(cuid())
+  storySubmissionId String    @map("story_submission_id")
+  editorId          String    @map("editor_id")
+  contentSnapshot   Json      @map("content_snapshot")
+  changeSummary     String?   @map("change_summary") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  storySubmission StorySubmission @relation(fields: [storySubmissionId], references: [id], onDelete: Cascade)
+  editor          User            @relation(fields: [editorId], references: [id])
+
+  @@index([storySubmissionId])
+  @@map("story_revisions")
+}
+
+// ============================================================================
+// USER INTERACTIONS
+// ============================================================================
+
+model CorrectionReport {
+  id                 String            @id @default(cuid())
+  personId           String            @map("person_id")
+  reporterId         String?           @map("reporter_id")
+  message            String            @db.Text
+  supportingSourceUrl String?          @map("supporting_source_url") @db.Text
+  status             CorrectionStatus  @default(PENDING)
+  adminNote          String?           @map("admin_note") @db.Text
+  resolvedBy         String?           @map("resolved_by")
+  resolvedAt         DateTime?         @map("resolved_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  person   Person  @relation(fields: [personId], references: [id], onDelete: Cascade)
+  reporter User?   @relation("UserCorrectionReports", fields: [reporterId], references: [id], onDelete: SetNull)
+  resolver User?   @relation("CorrectionResolver", fields: [resolvedBy], references: [id])
+
+  @@index([status])
+  @@index([personId])
+  @@index([reporterId])
+  @@map("correction_reports")
+}
+
+enum CorrectionStatus {
+  PENDING
+  IN_REVIEW
+  ACCEPTED
+  RESOLVED
+  REJECTED
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  personId  String   @map("person_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, personId])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+// ============================================================================
+// AUDIT AND LOGGING
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String   @map("actor_id")
+  action     String   @db.Text
+  entityType String   @map("entity_type") @db.Text
+  entityId   String   @map("entity_id") @db.Text
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  actor     User     @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
